@@ -1,3 +1,9 @@
+import LineChart from './ui/line-chart'
+
 export default function App() {
-  return <div>App</div>
+  return (
+    <div>
+      <LineChart />
+    </div>
+  )
 }
