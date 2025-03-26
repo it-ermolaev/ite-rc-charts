@@ -5,237 +5,197 @@ import './style.css'
  *  CHART-LIB
  */
 
-type Line = { x1: number; y1: number; x2: number; y2: number }
-type Point = { x: number; y: number }
+type Layout = { x: number; y: number; width: number; height: number }
+
+interface ChartLayout {
+  title: Layout
+  chart: Layout
+}
+
+interface AxesOptions {
+  color: string | CanvasPattern
+  width: number
+}
+
+interface TitleOptions {
+  text: string
+  display: boolean
+  fontSize: number
+  align: 'left' | 'center' | 'right'
+}
+
+interface LayoutOptions {
+  padding: number
+  snapping: number
+  gap: number
+}
 
 interface ChartOptions {
-  padding?: number
-  snapping?: number
-  axesArrowsWidth?: number
-  axesArrowsColor?: string | CanvasPattern
-  axesColor?: string | CanvasPattern
-  axesLabelsColor?: string | CanvasPattern
-  axesLabelsFontFamily?: string
-  axesLabelsFontSize?: number
-  axesLabelsMargin?: number
-  xAxisLabel?: string
-  yAxisLabel?: string
-  borderLayoutColor?: string | CanvasPattern
-  isAxesArrows?: boolean
-  isAxesLabels?: boolean
-  isBorderLayout?: boolean
+  axes?: Partial<AxesOptions>
+  layout?: Partial<LayoutOptions>
+  title?: Partial<TitleOptions>
 }
 
 class CartesianChart {
   private ctx: CanvasRenderingContext2D
-  private xAxisRawCoords: Line = { x1: 0, y1: 0, x2: 0, y2: 0 }
-  private yAxisRawCoords: Line = { x1: 0, y1: 0, x2: 0, y2: 0 }
-  private xAxisCoords: Line = this.xAxisRawCoords
-  private yAxisCoords: Line = this.yAxisRawCoords
-  private xAxisLabelCoords: Point = { x: 0, y: 0 }
-  private yAxisLabelCoords: Point = { x: 0, y: 0 }
+  private chartLayouts: ChartLayout = {
+    title: { x: 0, y: 0, width: 0, height: 0 },
+    chart: { x: 0, y: 0, width: 0, height: 0 },
+  }
 
-  readonly snapping: number
-  readonly padding: number
-  readonly axesArrowsWidth: number
-  readonly axesArrowsColor: string | CanvasPattern
-  readonly axesColor: string | CanvasPattern
-  readonly axesLabelsColor: string | CanvasPattern
-  readonly axesLabelsFontFamily: string
-  readonly axesLabelsFontSize: number
-  readonly axesLabelsMargin: number
-  readonly xAxisLabel: string
-  readonly yAxisLabel: string
-  readonly borderLayoutColor: string | CanvasPattern
-  readonly isAxesArrows: boolean
-  readonly isAxesLabels: boolean
-  readonly isBorderLayout: boolean
+  readonly options: {
+    axes: Required<AxesOptions>
+    layout: Required<LayoutOptions>
+    title: Required<TitleOptions>
+  }
 
   constructor(ctx: CanvasRenderingContext2D, options: ChartOptions = {}) {
-    const {
-      padding = 50,
-      snapping = 0.5,
-      axesArrowsWidth = 3,
-      axesArrowsColor = 'black',
-      axesColor = 'black',
-      axesLabelsColor = 'black',
-      axesLabelsFontFamily = 'system-ui',
-      axesLabelsFontSize = 14,
-      axesLabelsMargin = 10,
-      xAxisLabel = 'x',
-      yAxisLabel = 'y',
-      borderLayoutColor = 'lightblue',
-      isAxesArrows = false,
-      isAxesLabels = false,
-      isBorderLayout = false,
-    } = options
-
     this.ctx = ctx
 
-    this.padding = padding
-    this.snapping = snapping
-    this.axesArrowsWidth = axesArrowsWidth
-    this.axesArrowsColor = axesArrowsColor
-    this.axesColor = axesColor
-    this.axesLabelsColor = axesLabelsColor
-    this.axesLabelsFontFamily = axesLabelsFontFamily
-    this.axesLabelsFontSize = axesLabelsFontSize
-    this.axesLabelsMargin = axesLabelsMargin
-    this.xAxisLabel = xAxisLabel
-    this.yAxisLabel = yAxisLabel
-    this.borderLayoutColor = borderLayoutColor
-    this.isAxesArrows = isAxesArrows
-    this.isAxesLabels = isAxesLabels
-    this.isBorderLayout = isBorderLayout
+    this.options = {
+      axes: {
+        color: 'black',
+        width: 1,
+        ...options.axes,
+      },
+      layout: {
+        gap: 5,
+        padding: 35,
+        snapping: 0.5,
+        ...options.layout,
+      },
+      title: {
+        align: 'left',
+        display: false,
+        fontSize: 18,
+        text: 'Заголовок',
+        ...options.title,
+      },
+    }
 
-    this.initCoords()
+    this.initLayout()
   }
 
-  private initCoords() {
-    // axes raw coords
-    this.xAxisRawCoords = { x1: 0, y1: 0, x2: this.ctx.canvas.width - this.padding * 2, y2: 0 }
-    this.yAxisRawCoords = { x1: 0, y1: 0, x2: 0, y2: this.ctx.canvas.height - this.padding * 2 }
+  private initLayout = () => {
+    const { ctx, chartLayouts, options } = this
 
-    // axes mutable coords
-    this.xAxisCoords = { ...this.xAxisRawCoords }
-    this.yAxisCoords = { ...this.yAxisRawCoords }
-
-    if (this.isAxesLabels) {
-      this.ctx.save()
-
-      this.ctx.font = `${this.axesLabelsFontSize}px ${this.axesLabelsFontFamily}`
-      this.ctx.textAlign = 'center'
-      this.ctx.textBaseline = 'middle'
-
-      const xAxisLabelMeasure = this.ctx.measureText(this.xAxisLabel)
-      const yAxisLabelMeasure = this.ctx.measureText(this.yAxisLabel)
-
-      this.ctx.restore()
-
-      //axes-labels-coords
-      this.xAxisLabelCoords = {
-        x: this.xAxisRawCoords.x2 - xAxisLabelMeasure.width / 2,
-        y: -this.xAxisRawCoords.y2,
+    // init title-layout
+    if (options.title.display) {
+      chartLayouts.title = {
+        x: options.layout.padding + options.layout.snapping,
+        y: options.layout.padding + options.layout.snapping,
+        width: ctx.canvas.width - options.layout.padding * 2,
+        height: options.title.fontSize,
       }
-      this.yAxisLabelCoords = {
-        x: this.yAxisRawCoords.x2,
-        y: -this.yAxisRawCoords.y2 + yAxisLabelMeasure.actualBoundingBoxAscent,
-      }
+    }
 
-      // axes-offseted-coords
-      const xAxisOffset = xAxisLabelMeasure.width + this.axesLabelsMargin
-      const yAxisOffset =
-        yAxisLabelMeasure.actualBoundingBoxAscent +
-        yAxisLabelMeasure.actualBoundingBoxDescent +
-        this.axesLabelsMargin
-
-      this.xAxisCoords.x2 = this.xAxisRawCoords.x2 - xAxisOffset
-      this.yAxisCoords.y2 = this.yAxisRawCoords.y2 - yAxisOffset
+    // init chart-layout
+    chartLayouts.chart = {
+      x: options.layout.padding + options.layout.snapping,
+      y:
+        chartLayouts.title.height +
+        options.layout.padding +
+        options.layout.snapping +
+        options.layout.gap,
+      width: ctx.canvas.width - options.layout.padding * 2,
+      height:
+        ctx.canvas.height -
+        chartLayouts.title.height -
+        options.layout.padding * 2 -
+        options.layout.gap,
     }
   }
 
-  private drawBorderLayout() {
-    this.ctx.beginPath()
-    this.ctx.strokeStyle = this.borderLayoutColor
+  private drawTitle = () => {
+    const { ctx, chartLayouts, options } = this
 
-    this.ctx.moveTo(this.padding - this.snapping, 0)
-    this.ctx.lineTo(this.padding - this.snapping, this.ctx.canvas.height)
-    this.ctx.moveTo(this.ctx.canvas.width - this.padding - this.snapping, 0)
-    this.ctx.lineTo(this.ctx.canvas.width - this.padding - this.snapping, this.ctx.canvas.height)
-    this.ctx.moveTo(0, this.padding - this.snapping)
-    this.ctx.lineTo(this.ctx.canvas.width, this.padding - this.snapping)
-    this.ctx.moveTo(0, this.ctx.canvas.height - this.padding - this.snapping)
-    this.ctx.lineTo(this.ctx.canvas.width, this.ctx.canvas.height - this.padding - this.snapping)
+    ctx.save()
+    ctx.translate(chartLayouts.title.x, chartLayouts.title.y)
 
-    this.ctx.stroke()
+    ctx.font = `${options.title.fontSize}px Arial`
+    ctx.fillStyle = 'black'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'top'
+
+    const textMeasure = ctx.measureText(options.title.text)
+    let titleX = textMeasure.actualBoundingBoxLeft
+
+    switch (options.title.align) {
+      case 'center':
+        titleX = chartLayouts.title.width / 2
+        break
+      case 'right':
+        titleX = chartLayouts.title.width - textMeasure.actualBoundingBoxRight
+        break
+    }
+
+    ctx.fillText(options.title.text, titleX, 0)
+
+    ctx.restore()
   }
 
-  private drawAxesArrows() {
-    this.ctx.beginPath()
-    this.ctx.strokeStyle = this.axesArrowsColor
+  private drawBorderLayouts = () => {
+    const { ctx, chartLayouts } = this
 
-    // x-axis-arrow
-    this.ctx.moveTo(this.xAxisCoords.x2, this.xAxisCoords.y2)
-    this.ctx.lineTo(
-      this.xAxisCoords.x2 - this.axesArrowsWidth,
-      this.xAxisCoords.y2 + this.axesArrowsWidth,
-    )
-    this.ctx.moveTo(this.xAxisCoords.x2, this.xAxisCoords.y2)
-    this.ctx.lineTo(
-      this.xAxisCoords.x2 - this.axesArrowsWidth,
-      this.xAxisCoords.y2 - this.axesArrowsWidth,
-    )
+    ctx.save()
 
-    // y-axis-arrow
-    this.ctx.moveTo(this.yAxisCoords.x2, this.yAxisCoords.y2)
-    this.ctx.lineTo(
-      this.yAxisCoords.x2 + this.axesArrowsWidth,
-      this.yAxisCoords.y2 - this.axesArrowsWidth,
+    ctx.strokeStyle = 'lightblue'
+
+    ctx.strokeRect(
+      chartLayouts.title.x,
+      chartLayouts.title.y,
+      chartLayouts.title.width,
+      chartLayouts.title.height,
     )
-    this.ctx.moveTo(this.yAxisCoords.x2, this.yAxisCoords.y2)
-    this.ctx.lineTo(
-      this.yAxisCoords.x2 - this.axesArrowsWidth,
-      this.yAxisCoords.y2 - this.axesArrowsWidth,
+    ctx.strokeRect(
+      chartLayouts.chart.x,
+      chartLayouts.chart.y,
+      chartLayouts.chart.width,
+      chartLayouts.chart.height,
     )
 
-    this.ctx.stroke()
+    ctx.restore()
   }
 
-  private drawAxesLabels() {
-    this.ctx.save()
-    this.ctx.scale(1, -1)
+  private drawAxes = () => {
+    const { ctx, chartLayouts, options } = this
 
-    this.ctx.font = `${this.axesLabelsFontSize}px ${this.axesLabelsFontFamily}`
-    this.ctx.fillStyle = this.axesLabelsColor
-    this.ctx.textAlign = 'center'
-    this.ctx.textBaseline = 'middle'
+    ctx.save()
+    ctx.translate(chartLayouts.chart.x, chartLayouts.chart.y + chartLayouts.chart.height)
+    ctx.scale(1, -1)
+    ctx.beginPath()
 
-    this.ctx.fillText(this.xAxisLabel, this.xAxisLabelCoords.x, this.xAxisLabelCoords.y)
-    this.ctx.fillText(this.yAxisLabel, this.yAxisLabelCoords.x, this.yAxisLabelCoords.y)
+    ctx.strokeStyle = options.axes.color
+    ctx.lineWidth = options.axes.width
+    ctx.lineCap = 'square'
 
-    this.ctx.restore()
-  }
-
-  private drawAxes() {
-    this.ctx.beginPath()
-    this.ctx.strokeStyle = this.axesColor
+    const startX = 0
+    const startY = 0
 
     // x-axis
-    this.ctx.moveTo(this.xAxisCoords.x1, this.xAxisCoords.y1)
-    this.ctx.lineTo(this.xAxisCoords.x2, this.xAxisCoords.y2)
-
+    ctx.moveTo(startX, startY)
+    ctx.lineTo(chartLayouts.chart.width, startY)
     // y-axis
-    this.ctx.moveTo(this.yAxisCoords.x1, this.yAxisCoords.y1)
-    this.ctx.lineTo(this.yAxisCoords.x2, this.yAxisCoords.y2)
+    ctx.moveTo(startX, startY)
+    ctx.lineTo(startX, chartLayouts.chart.height)
 
-    this.ctx.stroke()
+    ctx.stroke()
+
+    ctx.restore()
   }
 
-  draw() {
-    this.ctx.clearRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height)
+  draw = () => {
+    const { ctx, options, drawBorderLayouts, drawTitle, drawAxes } = this
 
-    if (this.isBorderLayout) {
-      this.drawBorderLayout()
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+    drawBorderLayouts()
+
+    if (options.title.display) {
+      drawTitle()
     }
 
-    this.ctx.save()
-    this.ctx.translate(
-      this.padding - this.snapping,
-      this.ctx.canvas.height - this.padding - this.snapping,
-    )
-    this.ctx.scale(1, -1)
-
-    this.drawAxes()
-
-    if (this.isAxesArrows) {
-      this.drawAxesArrows()
-    }
-
-    if (this.isAxesLabels) {
-      this.drawAxesLabels()
-    }
-
-    this.ctx.restore()
+    drawAxes()
   }
 }
 
@@ -253,11 +213,7 @@ export default function LineChart() {
       const ctx = canvas.getContext('2d')
 
       if (ctx) {
-        const lineChart = new CartesianChart(ctx, {
-          isAxesArrows: true,
-          isAxesLabels: true,
-          isBorderLayout: true,
-        })
+        const lineChart = new CartesianChart(ctx, { title: { display: true, align: 'center' } })
 
         lineChart.draw()
 
